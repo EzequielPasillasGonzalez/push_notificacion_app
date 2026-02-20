@@ -27,9 +27,11 @@ class NotificationsBloc extends Bloc<NotificationsEvent, NotificationsState> {
 
     // Verificar estado de las notificaciones
     _initialStatusCheck();
-
-    // Listener para notificaciones en Foreground
+    // Listener para notificaciones en Foreground (App abierta)
     _onForegroundMessagge();
+
+    // Listener para notificaciones en Background / Terminada
+    _setupInteractedMessage();
   }
 
   static Future<void> initializeFirebaseNotifications() async {
@@ -114,5 +116,19 @@ class NotificationsBloc extends Bloc<NotificationsEvent, NotificationsState> {
     return state.notifications.firstWhere(
       (element) => element.messageId == pushMessageId,
     );
+  }
+
+  void _setupInteractedMessage() async {
+    // 1. App Terminada (Cerrada por completo):
+    // Captura el mensaje si la app se abrió al tocar una notificación.
+    RemoteMessage? initialMessage = await FirebaseMessaging.instance
+        .getInitialMessage();
+    if (initialMessage != null) {
+      _handleRemoteMessage(initialMessage);
+    }
+
+    // 2. App en Segundo Plano (Background):
+    // Escucha cuando el usuario toca una notificación y la app estaba minimizada.
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleRemoteMessage);
   }
 }
