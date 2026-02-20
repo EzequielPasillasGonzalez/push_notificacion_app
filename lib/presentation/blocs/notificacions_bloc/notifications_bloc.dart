@@ -7,6 +7,7 @@ import 'package:push_app/firebase_options.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:push_app/helpers/helpers.dart';
 
 part 'notifications_event.dart';
 part 'notifications_state.dart';
@@ -70,12 +71,13 @@ class NotificationsBloc extends Bloc<NotificationsEvent, NotificationsState> {
     print(token);
   }
 
-  void _handleRemoteMessage(RemoteMessage message) {
+  void handleRemoteMessage(RemoteMessage message) {
     if (message.notification == null) return;
 
     final notification = PushMessage(
-      messageId:
-          message.messageId?.replaceAll(':', '').replaceAll('%', '') ?? '',
+      messageId: message.messageId != null
+          ? CleanMessageId.clean(message.messageId!)
+          : '',
       title: message.notification!.title ?? '',
       body: message.notification!.body ?? '',
       sentDate: message.sentTime ?? DateTime.now(),
@@ -89,7 +91,7 @@ class NotificationsBloc extends Bloc<NotificationsEvent, NotificationsState> {
   }
 
   void _onForegroundMessagge() {
-    FirebaseMessaging.onMessage.listen(_handleRemoteMessage);
+    FirebaseMessaging.onMessage.listen(handleRemoteMessage);
   }
 
   void requestPermission() async {
@@ -124,11 +126,11 @@ class NotificationsBloc extends Bloc<NotificationsEvent, NotificationsState> {
     RemoteMessage? initialMessage = await FirebaseMessaging.instance
         .getInitialMessage();
     if (initialMessage != null) {
-      _handleRemoteMessage(initialMessage);
+      handleRemoteMessage(initialMessage);
     }
 
     // 2. App en Segundo Plano (Background):
     // Escucha cuando el usuario toca una notificación y la app estaba minimizada.
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleRemoteMessage);
+    FirebaseMessaging.onMessageOpenedApp.listen(handleRemoteMessage);
   }
 }
