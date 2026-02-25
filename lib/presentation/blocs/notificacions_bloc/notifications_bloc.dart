@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:push_app/config/local_notifications/local_notifications.dart';
 import 'package:push_app/domain/entities/push_message.dart';
 import 'package:push_app/firebase_options.dart';
 
@@ -13,15 +14,26 @@ part 'notifications_event.dart';
 part 'notifications_state.dart';
 
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // If you're going to use other Firebase services in the background, such as Firestore,
-  // make sure you call `initializeApp` before using other Firebase services.
   await Firebase.initializeApp();
 }
 
 class NotificationsBloc extends Bloc<NotificationsEvent, NotificationsState> {
   FirebaseMessaging messaging = FirebaseMessaging.instance;
+  int pushMessageIdCounter = 0;
 
-  NotificationsBloc() : super(NotificationsState()) {
+  final Future<void> Function() requestLocalNotificationPermission;
+  final void Function({
+    required int id,
+    String? title,
+    String? body,
+    String? data,
+  })
+  showLocalNotification;
+
+  NotificationsBloc({
+    required this.requestLocalNotificationPermission,
+    required this.showLocalNotification,
+  }) : super(NotificationsState()) {
     on<NotificationsStatusChanged>(_notificacionStatusChanged);
 
     on<NotificationReceived>(_onPushMessage);
@@ -30,9 +42,6 @@ class NotificationsBloc extends Bloc<NotificationsEvent, NotificationsState> {
     _initialStatusCheck();
     // Listener para notificaciones en Foreground (App abierta)
     _onForegroundMessagge();
-
-    // Listener para notificaciones en Background / Terminada
-    _setupInteractedMessage();
   }
 
   static Future<void> initializeFirebaseNotifications() async {
@@ -87,6 +96,14 @@ class NotificationsBloc extends Bloc<NotificationsEvent, NotificationsState> {
           : message.notification!.apple?.imageUrl,
     );
 
+    // Muestra la notificacion push
+    showLocalNotification(
+      id: pushMessageIdCounter++,
+      title: notification.title,
+      body: notification.body,
+      data: notification.messageId,
+    );
+
     add(NotificationReceived(message: notification));
   }
 
@@ -105,6 +122,9 @@ class NotificationsBloc extends Bloc<NotificationsEvent, NotificationsState> {
       sound: true,
     );
 
+    // Solicitar permisos a las notificaciones locales
+    await requestLocalNotificationPermission();
+
     add(NotificationsStatusChanged(status: settings.authorizationStatus));
   }
 
@@ -118,19 +138,5 @@ class NotificationsBloc extends Bloc<NotificationsEvent, NotificationsState> {
     return state.notifications.firstWhere(
       (element) => element.messageId == pushMessageId,
     );
-  }
-
-  void _setupInteractedMessage() async {
-    // 1. App Terminada (Cerrada por completo):
-    // Captura el mensaje si la app se abrió al tocar una notificación.
-    RemoteMessage? initialMessage = await FirebaseMessaging.instance
-        .getInitialMessage();
-    if (initialMessage != null) {
-      handleRemoteMessage(initialMessage);
-    }
-
-    // 2. App en Segundo Plano (Background):
-    // Escucha cuando el usuario toca una notificación y la app estaba minimizada.
-    FirebaseMessaging.onMessageOpenedApp.listen(handleRemoteMessage);
   }
 }
